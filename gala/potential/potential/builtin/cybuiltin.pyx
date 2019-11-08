@@ -98,6 +98,9 @@ cdef extern from "potential/potential/builtin/builtin_potentials.h":
     double logarithmic_value(double t, double *pars, double *q, int n_dim) nogil
     void logarithmic_gradient(double t, double *pars, double *q, int n_dim, double *grad) nogil
 
+    double veraciro_value(double t, double *pars, double *q, int n_dim) nogil
+    void veraciro_gradient(double t, double *pars, double *q, int n_dim, double *grad) nogil
+
     double longmuralibar_value(double t, double *pars, double *q, int n_dim) nogil
     void longmuralibar_gradient(double t, double *pars, double *q, int n_dim, double *grad) nogil
     double longmuralibar_density(double t, double *pars, double *q, int n_dim) nogil
@@ -106,7 +109,7 @@ __all__ = ['NullPotential', 'HenonHeilesPotential', # Misc. potentials
            'KeplerPotential', 'HernquistPotential', 'IsochronePotential', 'PlummerPotential',
            'JaffePotential', 'StonePotential', 'PowerLawCutoffPotential', # Spherical models
            'SatohPotential', 'MiyamotoNagaiPotential', # Disk models
-           'NFWPotential', 'LeeSutoTriaxialNFWPotential', 'LogarithmicPotential',
+           'NFWPotential', 'LeeSutoTriaxialNFWPotential', 'LogarithmicPotential', 'VeraCiroPotential',
            'LongMuraliBarPotential', # Triaxial models
            ]
 
@@ -797,6 +800,75 @@ class LogarithmicPotential(CPotentialBase):
     def to_latex(self):
         return r"\Phi(x,y,z) &= \frac{1}{2}v_{c}^2\ln((x/q_1)^2 + (y/q_2)^2 + (z/q_3)^2 + r_h^2)"
 
+cdef class VeraCiroWrapper(CPotentialWrapper):
+
+    def __init__(self, G, parameters, q0, R):
+        self.init([G] + list(parameters),
+                  np.ascontiguousarray(q0),
+                  np.ascontiguousarray(R))
+        self.cpotential.value[0] = <energyfunc>(veraciro_value)
+        self.cpotential.gradient[0] = <gradientfunc>(veraciro_gradient)
+
+@format_doc(common_doc=_potential_docstring)
+class VeraCiroPotential(CPotentialBase):
+    """
+    The Logarithmic potential with a smooth transition from axisymmetric (r_A,r_T<<r_a)
+    to triaxial (r_A,r_T>>r_a). Ref: Vera-Ciro&Helmi2013
+    .. math::
+        \Phi = v_{halo}ln(r^2+d^2)
+        r = frac{r_a+r_T}{r_a+r_A}*r_A
+    Parameters
+    ----------
+    v_h  : numeric
+        Rotation velocity at large radii.
+    d   : numeric
+        Radius of transition towards flat rotation curve.
+    r_a : numeric
+        Transition radius from axisymetric to triaxial (actual transition happens at r<r_a)
+    q_z : numeric
+        Flattening parameter in the inner regime (z direction).
+    phi : numeric
+        First euler angle in the z-x-z convention.
+    q1  : numeric
+        Flattening parameter 1 in the outer regime (xy plane).
+    q2  : numeric
+        Flattening parameter 2 in the outer regime (xy plane).
+    q3  : numeric
+        Flattening parameter 3 in the outer regime (z direction).
+    {common_doc}
+    """
+    _physical_types = {'v_h': 'speed',
+                       'd': 'length',
+                       'r_a': 'length',
+                       'q_z': 'dimensionless',
+                       'phi': 'angle',
+                       'q1': 'dimensionless',
+                       'q2': 'dimensionless',
+                       'q3': 'dimensionless'}
+
+    def __init__(self, v_h, d, r_a=30, q_z=0.9, phi=97, q1=1.38, q2=1,
+                 q3=1.36, origin=None, units=None, R=None ):
+            from collections import OrderedDict
+            parameters = OrderedDict()
+            parameters['v_h'] = v_h
+            parameters['d'] = d
+            parameters['r_a'] = r_a
+            parameters['q_z'] = q_z
+            parameters['phi'] = phi
+            parameters['q1'] = q1
+            parameters['q2'] = q2
+            parameters['q3'] = q3
+
+            super(VeraCiroPotential, self).__init__(parameters=parameters,
+                                                    units=units, origin=origin,
+                                                    R=R)
+
+            if not isinstance(self.units, DimensionlessUnitSystem):
+                if self.units['angle'] != u.radian:
+                    raise ValueError("Angle unit must be radian.")
+
+    def to_latex(self):
+        return r"""\Phi = v_{halo}ln(r^2+d^2) // r = frac{r_a+r_T}{r_a+r_A}*r_A """
 
 cdef class LeeSutoTriaxialNFWWrapper(CPotentialWrapper):
 

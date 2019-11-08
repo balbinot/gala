@@ -960,6 +960,85 @@ void logarithmic_gradient(double t, double *pars, double *q, int n_dim, double *
 /* ---------------------------------------------------------------------------
     Logarithmic (triaxial)
 */
+
+/* ---------------------------------------------------------------------------
+    Logarithmic (triaxial) with break (Vera-Ciro & Helmi 2013)
+    https://ui.adsabs.harvard.edu/abs/2013ApJ...773L...4V/abstract
+*/
+
+double veraciro_value(double t, double *pars, double *q, int n_dim) {
+    /*
+     * pars:
+     * - vh
+     * - d
+     * - r_a 
+     * - q_z
+     * - phi
+     * - q1
+     * - q2 
+     * - q3
+     */
+
+    double x, y, z;
+    double a1, a2, c1, c2, c3;
+    double rA, rT, r;
+
+    x = q[0];
+    y = q[1];
+    z = q[2];
+
+    a1 = cos(pars[4]);
+    a2 = sin(pars[4]);
+    c1 = pow(a1/pars[5], 2.) + pow(a2/pars[6], 2.);
+    c2 = pow(a1/pars[6], 2.) + pow(a2/pars[5], 2.);
+    c3 = 2*a1*a2*(pow(pars[5], -2.) - pow(pars[6], -2.));
+
+    rA = sqrt(x*x + y*y + pow(z/pars[3], 2.));
+    rT = sqrt(c1*x*x + c2*y*y + c3*x*y + pow(z/pars[7], 2.));
+    r = (pars[2] + rT)/(pars[2] + rA)*rA;
+
+    return pow(pars[0], 2.)*log(r*r + pow(pars[1], 2.));
+}
+
+void veraciro_gradient(double t, double *pars, double *q, int n_dim, double *grad) {
+
+    double x, y, z;
+    double a1, a2, c1, c2, c3;
+    double rA, rT, r;
+    double A, B, Cx, Cy, Cz, D;
+
+    x = q[0];
+    y = q[1];
+    z = q[2];
+
+    a1 = cos(pars[4]);
+    a2 = sin(pars[4]);
+    c1 = pow(a1/pars[5], 2.) + pow(a2/pars[6], 2.);
+    c2 = pow(a1/pars[6], 2.) + pow(a2/pars[5], 2.);
+    c3 = 2*a1*a2*(pow(pars[5], -2.) - pow(pars[6], -2.));
+
+    rA = sqrt(x*x + y*y + pow(z/pars[3], 2.));
+    rT = sqrt(c1*x*x + c2*y*y + c3*x*y + pow(z/pars[7], 2.));
+    r = (pars[2] + rT)/(pars[2] + rA)*rA;
+
+    A = pow(pars[2] + rT, 2.)/pow(pars[2] + rA, 2.);
+    B = pow(pars[2] + rT, 2.)*rA/pow(pars[2] + rA, 3.);
+    Cx = (pars[2] + rT)*(c1*x + c3*y/2.)*pow(rA, 2)/(pow(pars[2] + rA, 2.)*rT); 
+    Cy = (pars[2] + rT)*(c2*y + c3*x/2.)*pow(rA, 2)/(pow(pars[2] + rA, 2.)*rT); 
+    Cz = (pars[2] + rT)*pow(rA, 2.)/(pow(pars[7], 2.)*pow(pars[2] + rA, 2.)*rT);
+    D = pow(pars[1], 2.) + pow(pars[2] + rT, 2.)*pow(rA, 2.)/pow(pars[2] + rA, 2.);
+    
+    grad[0] = pow(pars[0], 2.)*2*(x*(A-B)+Cx)/D;
+    grad[1] = pow(pars[0], 2.)*2*(y*(A-B)+Cy)/D;
+    grad[2] = pow(pars[0], 2.)*2*z*((A-B)/pow(pars[3], 2.) + Cz)/D;
+}
+
+
+/* ---------------------------------------------------------------------------
+    Logarithmic (triaxial) with break Vera-Ciro & Helmi 2013
+*/
+
+
 double longmuralibar_value(double t, double *pars, double *q, int n_dim) {
     /*  http://adsabs.harvard.edu/abs/1992ApJ...397...44L
 
