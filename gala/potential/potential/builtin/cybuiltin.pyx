@@ -811,12 +811,9 @@ cdef class VeraCiroWrapper(CPotentialWrapper):
 
 @format_doc(common_doc=_potential_docstring)
 class VeraCiroPotential(CPotentialBase):
-    """
+    r"""
     The Logarithmic potential with a smooth transition from axisymmetric (r_A,r_T<<r_a)
     to triaxial (r_A,r_T>>r_a). Ref: Vera-Ciro&Helmi2013
-    .. math::
-        \Phi = v_{halo}ln(r^2+d^2)
-        r = frac{r_a+r_T}{r_a+r_A}*r_A
     Parameters
     ----------
     v_h  : numeric
@@ -846,8 +843,9 @@ class VeraCiroPotential(CPotentialBase):
                        'q2': 'dimensionless',
                        'q3': 'dimensionless'}
 
-    def __init__(self, v_h, d, r_a=30, q_z=0.9, phi=97, q1=1.38, q2=1,
-                 q3=1.36, origin=None, units=None, R=None ):
+    def __init__(self, v_h, d, r_a, q_z, phi, q1, q2, q3, units=None,
+                 origin=None, R=None):
+
             from collections import OrderedDict
             parameters = OrderedDict()
             parameters['v_h'] = v_h

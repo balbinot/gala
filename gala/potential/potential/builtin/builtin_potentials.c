@@ -969,14 +969,15 @@ void logarithmic_gradient(double t, double *pars, double *q, int n_dim, double *
 double veraciro_value(double t, double *pars, double *q, int n_dim) {
     /*
      * pars:
-     * - vh
-     * - d
-     * - r_a 
-     * - q_z
-     * - phi
-     * - q1
-     * - q2 
-     * - q3
+     *  0: G (unused)
+     *  1: vh 
+     *  2: d  
+     *  3: r_a 
+     *  4: q_z
+     *  5: phi
+     *  6: q1
+     *  7: q2 
+     *  8: q3
      */
 
     double x, y, z;
@@ -987,20 +988,32 @@ double veraciro_value(double t, double *pars, double *q, int n_dim) {
     y = q[1];
     z = q[2];
 
-    a1 = cos(pars[4]);
-    a2 = sin(pars[4]);
-    c1 = pow(a1/pars[5], 2.) + pow(a2/pars[6], 2.);
-    c2 = pow(a1/pars[6], 2.) + pow(a2/pars[5], 2.);
-    c3 = 2*a1*a2*(pow(pars[5], -2.) - pow(pars[6], -2.));
+    a1 = cos(pars[5]);
+    a2 = sin(pars[5]);
+    c1 = pow(a1/pars[6], 2.) + pow(a2/pars[7], 2.);
+    c2 = pow(a1/pars[7], 2.) + pow(a2/pars[6], 2.);
+    c3 = 2*a1*a2*(pow(pars[6], -2.) - pow(pars[7], -2.));
 
-    rA = sqrt(x*x + y*y + pow(z/pars[3], 2.));
-    rT = sqrt(c1*x*x + c2*y*y + c3*x*y + pow(z/pars[7], 2.));
-    r = (pars[2] + rT)/(pars[2] + rA)*rA;
+    rA = sqrt(x*x + y*y + pow(z/pars[4], 2.));
+    rT = sqrt(c1*x*x + c2*y*y + c3*x*y + pow(z/pars[8], 2.));
+    r = (pars[3] + rT)/(pars[3] + rA)*rA;
 
-    return pow(pars[0], 2.)*log(r*r + pow(pars[1], 2.));
+    return pow(pars[1], 2.)*log(r*r + pow(pars[2], 2.));
 }
 
 void veraciro_gradient(double t, double *pars, double *q, int n_dim, double *grad) {
+    /*
+     * pars:
+     *  0: G (unused)
+     *  1: vh 
+     *  2: d  
+     *  3: r_a 
+     *  4: q_z
+     *  5: phi
+     *  6: q1
+     *  7: q2 
+     *  8: q3
+     */
 
     double x, y, z;
     double a1, a2, c1, c2, c3;
@@ -1011,26 +1024,27 @@ void veraciro_gradient(double t, double *pars, double *q, int n_dim, double *gra
     y = q[1];
     z = q[2];
 
-    a1 = cos(pars[4]);
-    a2 = sin(pars[4]);
-    c1 = pow(a1/pars[5], 2.) + pow(a2/pars[6], 2.);
-    c2 = pow(a1/pars[6], 2.) + pow(a2/pars[5], 2.);
-    c3 = 2*a1*a2*(pow(pars[5], -2.) - pow(pars[6], -2.));
 
-    rA = sqrt(x*x + y*y + pow(z/pars[3], 2.));
-    rT = sqrt(c1*x*x + c2*y*y + c3*x*y + pow(z/pars[7], 2.));
-    r = (pars[2] + rT)/(pars[2] + rA)*rA;
+    a1 = cos(pars[5]);
+    a2 = sin(pars[5]);
+    c1 = pow(a1/pars[6], 2.) + pow(a2/pars[7], 2.);
+    c2 = pow(a1/pars[7], 2.) + pow(a2/pars[6], 2.);
+    c3 = 2*a1*a2*(pow(pars[6], -2.) - pow(pars[7], -2.));
 
-    A = pow(pars[2] + rT, 2.)/pow(pars[2] + rA, 2.);
-    B = pow(pars[2] + rT, 2.)*rA/pow(pars[2] + rA, 3.);
-    Cx = (pars[2] + rT)*(c1*x + c3*y/2.)*pow(rA, 2)/(pow(pars[2] + rA, 2.)*rT); 
-    Cy = (pars[2] + rT)*(c2*y + c3*x/2.)*pow(rA, 2)/(pow(pars[2] + rA, 2.)*rT); 
-    Cz = (pars[2] + rT)*pow(rA, 2.)/(pow(pars[7], 2.)*pow(pars[2] + rA, 2.)*rT);
-    D = pow(pars[1], 2.) + pow(pars[2] + rT, 2.)*pow(rA, 2.)/pow(pars[2] + rA, 2.);
+    rA = sqrt(x*x + y*y + pow(z/pars[4], 2.));
+    rT = sqrt(c1*x*x + c2*y*y + c3*x*y + pow(z/pars[8], 2.));
+    r = (pars[3] + rT)/(pars[3] + rA)*rA;
+
+    A = pow(pars[3] + rT, 2.)/pow(pars[3] + rA, 2.);
+    B = pow(pars[3] + rT, 2.)*rA/pow(pars[3] + rA, 3.);
+    Cx = (pars[3] + rT)*(c1*x + c3*y/2.)*pow(rA, 2)/(pow(pars[3] + rA, 2.)*rT); 
+    Cy = (pars[3] + rT)*(c2*y + c3*x/2.)*pow(rA, 2)/(pow(pars[3] + rA, 2.)*rT); 
+    Cz = (pars[3] + rT)*pow(rA, 2.)/(pow(pars[8], 2.)*pow(pars[3] + rA, 2.)*rT);
+    D = pow(pars[2], 2.) + pow(pars[3] + rT, 2.)*pow(rA, 2.)/pow(pars[3] + rA, 2.);
     
-    grad[0] = pow(pars[0], 2.)*2*(x*(A-B)+Cx)/D;
-    grad[1] = pow(pars[0], 2.)*2*(y*(A-B)+Cy)/D;
-    grad[2] = pow(pars[0], 2.)*2*z*((A-B)/pow(pars[3], 2.) + Cz)/D;
+    grad[0] = grad[0] + pow(pars[1], 2.)*2*(x*(A-B)+Cx)/D;
+    grad[1] = grad[1] + pow(pars[1], 2.)*2*(y*(A-B)+Cy)/D;
+    grad[2] = grad[2] + pow(pars[1], 2.)*2*z*((A-B)/pow(pars[4], 2.) + Cz)/D;
 }
 
 
