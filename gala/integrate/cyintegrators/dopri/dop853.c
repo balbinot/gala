@@ -1003,6 +1003,7 @@ void Fwrapper_direct_nbody (unsigned full_ndim, double t, double *w, double *f,
     int i, j, k;
     unsigned ndim = full_ndim / norbits; // phase-space dimensionality
     double f2[ndim/2];
+    double NORM, u[3], Cfric, Coulomb;
 
     for (i=0; i < norbits; i++) {
         // call gradient function
@@ -1025,6 +1026,25 @@ void Fwrapper_direct_nbody (unsigned full_ndim, double t, double *w, double *f,
                     // minus sign below because hamiltonian gradient computes
                     // the acceleration!
                     f[i*ndim + p->n_dim + k] = f[i*ndim + p->n_dim + k] - f2[k];
+            }
+            else {
+                NORM = sqrt(pow(w[i*ndim, 3], 2) + pow(w[i*ndim, 4], 2) + pow(w[i*ndim, 5], 2));
+                u[0] = w[i*ndim, 3]/NORM;
+                u[1] = w[i*ndim, 4]/NORM;
+                u[2] = w[i*ndim, 5]/NORM;
+                printf("Mass, Rs = %f %f\n", pp->parameters[0][1], pp->parameters[0][2]);
+
+                Cfric = pp->parameters[0][1] * Coulomb * dens * (erf(X) - 2*X/sqrt(M_PI)*exp(-pow(X, 2)))
+
+                for (k=0; k<p->n_dim; k++)
+                    // minus sign below because hamiltonian gradient computes
+                    // the acceleration!
+                    //
+                    f[i*ndim + p->n_dim + k] = f[i*ndim + p->n_dim + k] - 0.00005*u[k];
+                    
+                    //printf("This is where the force should be changed\n");
+                    //printf("R = [%f, %f, %f]\n", w[j*ndim, 0], w[j*ndim, 1], w[j*ndim, 2]);
+                    //printf("V = [%f, %f, %f]\n", w[j*ndim, 3], w[j*ndim, 4], w[j*ndim, 5]);
             }
         }
     }

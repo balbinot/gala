@@ -988,6 +988,7 @@ double veraciro_value(double t, double *pars, double *q, int n_dim) {
     y = q[1];
     z = q[2];
 
+
     a1 = cos(pars[5]);
     a2 = sin(pars[5]);
     c1 = pow(a1/pars[6], 2.) + pow(a2/pars[7], 2.);
@@ -1025,6 +1026,8 @@ void veraciro_gradient(double t, double *pars, double *q, int n_dim, double *gra
     z = q[2];
 
 
+    //printf("V = [%f, %f, %f]\n", q[3], q[4], q[5]);
+    //printf("R = [%f, %f, %f]\n", q[0], q[1], q[2]);
     a1 = cos(pars[5]);
     a2 = sin(pars[5]);
     c1 = pow(a1/pars[6], 2.) + pow(a2/pars[7], 2.);
