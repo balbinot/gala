@@ -1004,6 +1004,7 @@ void Fwrapper_direct_nbody (unsigned full_ndim, double t, double *w, double *f,
     unsigned ndim = full_ndim / norbits; // phase-space dimensionality
     double f2[ndim/2];
     double NORM, u[3], Cfric, Coulomb;
+    double v_h2, r, rho0, rho, q[3], pars[3];
 
     for (i=0; i < norbits; i++) {
         // call gradient function
@@ -1028,18 +1029,43 @@ void Fwrapper_direct_nbody (unsigned full_ndim, double t, double *w, double *f,
                     f[i*ndim + p->n_dim + k] = f[i*ndim + p->n_dim + k] - f2[k];
             }
             else {
-                NORM = sqrt(pow(w[i*ndim, 3], 2) + pow(w[i*ndim, 4], 2) + pow(w[i*ndim, 5], 2));
+                NORM = sqrt(pow(w[i*ndim, 3], 2) + 
+                            pow(w[i*ndim, 4], 2) +
+                            pow(w[i*ndim, 5], 2));
                 u[0] = w[i*ndim, 3]/NORM;
                 u[1] = w[i*ndim, 4]/NORM;
                 u[2] = w[i*ndim, 5]/NORM;
-                printf("Mass, Rs = %f %f\n", pp->parameters[0][1], pp->parameters[0][2]);
 
-                Cfric = pp->parameters[0][1] * Coulomb * dens * (erf(X) - 2*X/sqrt(M_PI)*exp(-pow(X, 2)))
+                q[0] = w[i*ndim, 0];
+                q[1] = w[i*ndim, 1];
+                q[2] = w[i*ndim, 2];
+
+                // Take the 3 first parameters of the Halo (assumed to be at 
+                // position 2 of CompositePotential).
+                pars[0] = p->parameters[2][0];
+                pars[1] = p->parameters[2][1];
+                pars[2] = p->parameters[2][2];
+
+                printf("Mass, Rs = %f %f\n", pp->parameters[0][1], pp->parameters[0][2]);
+                printf("halo G, par1, par2 = %.10e, %f, %f\n", p->parameters[2][0],
+                                                          p->parameters[2][1],
+                                                          p->parameters[2][2]);
+
+                // Compute NFW density, assuming spherical (only analytic?)
+                v_h2 = pars[0] * pars[1] / pars[2];
+                r = sqrt(q[0]*q[0] + q[1]*q[1] + q[2]*q[2]);
+                rho0 = v_h2 / (4*M_PI*pars[0]*pars[2]*pars[2]);
+                rho = rho0 / ((r/pars[2]) * pow(1+r/pars[2],2));
+                printf("Halo density: %f\n", rho);
+
+                // Compute Coulomb logarithm
+
+                //Cfric = pp->parameters[0][1] * Coulomb * dens * (erf(X) - 2*X/sqrt(M_PI)*exp(-pow(X, 2)))
 
                 for (k=0; k<p->n_dim; k++)
                     // minus sign below because hamiltonian gradient computes
                     // the acceleration!
-                    //
+                    //`
                     f[i*ndim + p->n_dim + k] = f[i*ndim + p->n_dim + k] - 0.00005*u[k];
                     
                     //printf("This is where the force should be changed\n");
