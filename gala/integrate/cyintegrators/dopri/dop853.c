@@ -1003,8 +1003,9 @@ void Fwrapper_direct_nbody (unsigned full_ndim, double t, double *w, double *f,
     int i, j, k;
     unsigned ndim = full_ndim / norbits; // phase-space dimensionality
     double f2[ndim/2];
-    double NORM, u[3], Cfric, Coulomb;
-    double v_h2, r, rho0, rho, q[3], pars[3];
+    double NORM, u[3], q[3];
+    double Cfric, lnC, I, g, Rsat, Om, L[3], Lnorm, d2r, x, sigma, X;
+    double v_h2, r, rho0, rho, pars[3];
 
     for (i=0; i < norbits; i++) {
         // call gradient function
@@ -1039,34 +1040,70 @@ void Fwrapper_direct_nbody (unsigned full_ndim, double t, double *w, double *f,
                 q[0] = w[i*ndim, 0];
                 q[1] = w[i*ndim, 1];
                 q[2] = w[i*ndim, 2];
+                r = sqrt(q[0]*q[0] + q[1]*q[1] + q[2]*q[2]);
 
                 // Take the 3 first parameters of the Halo (assumed to be at 
                 // position 2 of CompositePotential).
-                pars[0] = p->parameters[2][0];
+                pars[0] = p->parameters[2][0]; 
                 pars[1] = p->parameters[2][1];
                 pars[2] = p->parameters[2][2];
 
-                printf("Mass, Rs = %f %f\n", pp->parameters[0][1], pp->parameters[0][2]);
+                // Mass-loss goes here
+                // pp->parameters[i][1] = 0.99*pp->parameters[i][1];
+
+                printf("Time = %f \n", t);
+                printf("Mass, Rs = %f %f\n", pp->parameters[i][1], pp->parameters[i][2]);
                 printf("halo G, par1, par2 = %.10e, %f, %f\n", p->parameters[2][0],
-                                                          p->parameters[2][1],
-                                                          p->parameters[2][2]);
+                                                               p->parameters[2][1],
+                                                               p->parameters[2][2]);
 
                 // Compute NFW density, assuming spherical (only analytic?)
                 v_h2 = pars[0] * pars[1] / pars[2];
-                r = sqrt(q[0]*q[0] + q[1]*q[1] + q[2]*q[2]);
                 rho0 = v_h2 / (4*M_PI*pars[0]*pars[2]*pars[2]);
                 rho = rho0 / ((r/pars[2]) * pow(1+r/pars[2],2));
                 printf("Halo density: %f\n", rho);
 
                 // Compute Coulomb logarithm
+                // 0. Get the tidal radius (Rsat)
+                // Cross
+                L[0] = q[1]*u[2] - q[2]*u[1];
+                L[1] = -q[0]*u[2] + q[2]*u[0];
+                L[2] = q[0]*u[1] - q[1]*u[0];
+                Lnorm = sqrt(pow(L[0], 2) + 
+                             pow(L[1], 2) +
+                             pow(L[2], 2));
+                Om = Lnorm / pow(r, 2.); // Angular velocity
+                d2r = c_d2_dr2(p, t, q, &L[0]);
 
-                //Cfric = pp->parameters[0][1] * Coulomb * dens * (erf(X) - 2*X/sqrt(M_PI)*exp(-pow(X, 2)))
+                //This is the instantaneous tidal radius
+                //Rsat = pow(pp->parameters[i][0] * pp->parameters[i][1] / (Om*Om - d2r), 1./3.);
+                Rsat = pow(pp->parameters[i][1]/3e12, 1./3.)*25.;
+                //Rsat = 1.0;
+
+                // 1. Compute I
+                x = Rsat/pp->parameters[i][2];
+
+                I = 0.10947 * pow(x, 3.989) / 
+                    ( 1 + 0.90055*pow(x, 1.099) + 0.03568*pow(x, 1.189) + 0.06403*pow(x, 1.989));
+
+                g = log(1+x) - (x / (1+x));
+                lnC = log(r/Rsat) + I/pow(g,2);
+                printf("Sat RJ, lnC: %f, %f\n", Rsat, lnC);
+
+                // 2. Compute Sigma(r/rs)
+                sigma = 134. * 1.4393 * pow(r/pars[2], 0.354) / (1. + 1.1756*pow(r/pars[2], 0.725));
+
+                // 3. Get friction
+                X = NORM/sqrt(2.*pow(sigma, 2.));
+
+                Cfric = 4*M_PI * lnC * pow(pars[0], 2.) * pow(pp->parameters[i][1], 2.) * rho / pow(NORM, 2.);
+                Cfric = Cfric*(erf(X) - 2*X/sqrt(M_PI)*exp(-pow(X, 2)));
 
                 for (k=0; k<p->n_dim; k++)
                     // minus sign below because hamiltonian gradient computes
                     // the acceleration!
                     //`
-                    f[i*ndim + p->n_dim + k] = f[i*ndim + p->n_dim + k] - 0.00005*u[k];
+                    f[i*ndim + p->n_dim + k] = f[i*ndim + p->n_dim + k] - Cfric*u[k];
                     
                     //printf("This is where the force should be changed\n");
                     //printf("R = [%f, %f, %f]\n", w[j*ndim, 0], w[j*ndim, 1], w[j*ndim, 2]);
