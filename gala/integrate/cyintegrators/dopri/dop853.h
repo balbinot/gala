@@ -251,3 +251,6 @@ extern void UpdateMass(unsigned ndim, double t, double *w, double *f,
                        CPotential *p, CFrame *fr,
                        unsigned norbits, unsigned nbody,
                        void *args); // here args becomes the particle potentials
+
+double HayashiML (double Ri, double Rf, double mbnd, double *pars);
+double NFWML (double R, double *pars);

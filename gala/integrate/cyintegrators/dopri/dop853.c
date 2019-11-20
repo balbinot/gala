@@ -18,104 +18,8 @@ static double    *rcont5, *rcont6, *rcont7, *rcont8;
 
 // Global cheating
 static FILE *logfile;
-double MASS, RJ[1];
+double MASS[1], RJ[1];
 
-void UpdateMass (unsigned full_ndim, double t, double *w, double *f,
-                 CPotential *p, CFrame *fr,
-                 unsigned norbits, unsigned nbody,
-                 void *args) {
-    /* Here, the extra args are actually the array of CPotential objects that
-       represent the potentials of the individual particles.
-    */
-    CPotential *pp;
-
-    // Note: only really works with a static frame! This should be enforced
-    int i, j, k;
-    unsigned ndim = full_ndim / norbits; // phase-space dimensionality
-    double f2[ndim/2];
-    double NORM, u[3], q[3];
-    double Cfric, lnC, I, g, Rsat, Om, L[3], Lnorm, d2r, x, sigma, X;
-    double v_h2, r, rho0, rho, pars[3];
-
-    for (j=0; j < nbody; j++) { // the particles generating force
-        pp = ((CPotential **)args)[j];
-
-        if ((pp->null) == 1)
-            continue;
-
-        (pp->q0)[0] = &w[j*ndim];
-
-        NORM = sqrt(pow(w[j*ndim, 3], 2) + 
-                    pow(w[j*ndim, 4], 2) +
-                    pow(w[j*ndim, 5], 2));
-        u[0] = w[j*ndim, 3]/NORM;
-        u[1] = w[j*ndim, 4]/NORM;
-        u[2] = w[j*ndim, 5]/NORM;
-        q[0] = w[j*ndim, 0];
-        q[1] = w[j*ndim, 1];
-        q[2] = w[j*ndim, 2];
-        r = sqrt(q[0]*q[0] + q[1]*q[1] + q[2]*q[2]);
-
-        // Take the 3 first parameters of the Halo (assumed to be at 
-        // position 2 of CompositePotential).
-        pars[0] = p->parameters[2][0]; 
-        pars[1] = p->parameters[2][1];
-        pars[2] = p->parameters[2][2];
-
-        // Mass-loss goes here
-        // pp->parameters[i][1] = 0.99*pp->parameters[i][1];
-        // Compute Coulomb logarithm
-        // 0. Get the tidal radius (Rsat)
-        // Cross
-        L[0] = q[1]*u[2] - q[2]*u[1];
-        L[1] = -q[0]*u[2] + q[2]*u[0];
-        L[2] = q[0]*u[1] - q[1]*u[0];
-        Lnorm = sqrt(pow(L[0], 2) + 
-                     pow(L[1], 2) +
-                     pow(L[2], 2));
-        Om = Lnorm / pow(r, 2.); // Angular velocity
-        d2r = c_d2_dr2(p, t, q, &L[0]);
-
-        //This is the instantaneous tidal radius
-        Rsat = pow(pp->parameters[j][0] * pp->parameters[j][1] / (Om*Om - d2r), 1./3.);
-
-        // Compute mass loss
-        if (abs(t) < 0.000001) {
-            setlocale(LC_NUMERIC, "French_Canada.1252"); //OMG what am I doing?
-            logfile = fopen("output.dat", "w");
-            setbuf(logfile, NULL);
-            RJ[j] = Rsat;
-            printf("Initial RJ: %f", Rsat);
-        }
-        else if (t > 0) {
-            // Forward integration, mass is lost
-            if (Rsat < RJ[j]) {
-                // lose mass
-                pp->parameters[j][1] = pp->parameters[j][1]*pow(Rsat/RJ[j],1./2.);
-                printf("Updating RJ from, to: %f %f", RJ[j], Rsat);
-                RJ[j] = Rsat;
-            }
-            else {
-                //Tidal radius is larger, do nothing
-            }
-        }
-        else {
-            if (Rsat > RJ[j]) {
-                // gain mass
-                pp->parameters[j][1] = pp->parameters[j][1]*pow(Rsat/RJ[j],1./2.);
-                RJ[j] = Rsat;
-            }
-            else {
-                //Tidal radius is smaller, do nothing
-            }
-        }
-
-        fprintf(logfile, "%f %f %f \n", t, pp->parameters[j][1], RJ[j]);
-        printf("Will print this to file: %f %f %f\r\n", t, pp->parameters[j][1], RJ[j]);
-    }
-    
-
-}
 
 
 long nfcnRead (void)
@@ -627,6 +531,7 @@ static int dopcor (unsigned n, FcnEqDiff fcn, CPotential *p, CFrame *fr, unsigne
       fcn (n, xph, k5, k4, p, fr, norbits, nbody, args);
       nfcn++;
       //printf("STEP ACCEPTED \n");
+      // Pau: Comment to remove mass loss
       UpdateMass(n, xph, k5, k4, p, fr, norbits, nbody, args);
 
       /* stiffness detection */
@@ -1139,7 +1044,7 @@ void Fwrapper_direct_nbody (unsigned full_ndim, double t, double *w, double *f,
                     // the acceleration!
                     f[i*ndim + p->n_dim + k] = f[i*ndim + p->n_dim + k] - f2[k];
             }
-            else {
+            else if (pp->null != 1) {
                 NORM = sqrt(pow(w[i*ndim, 3], 2) + 
                             pow(w[i*ndim, 4], 2) +
                             pow(w[i*ndim, 5], 2));
@@ -1186,8 +1091,8 @@ void Fwrapper_direct_nbody (unsigned full_ndim, double t, double *w, double *f,
                 d2r = c_d2_dr2(p, t, q, &L[0]);
 
                 //This is the instantaneous tidal radius
-                //Rsat = pow(pp->parameters[i][0] * pp->parameters[i][1] / (Om*Om - d2r), 1./3.);
-                Rsat = pow(pp->parameters[i][1]/3e12, 1./3.)*25.;
+                Rsat = pow(pp->parameters[i][0] * pp->parameters[i][1] / (Om*Om - d2r), 1./3.);
+                //Rsat = pow(pp->parameters[i][1]/3e12, 1./3.)*25.;
                 //Rsat = 1.0;
 
                 // 1. Compute I
@@ -1223,6 +1128,183 @@ void Fwrapper_direct_nbody (unsigned full_ndim, double t, double *w, double *f,
     }
 
 }
+
+void UpdateMass (unsigned full_ndim, double t, double *w, double *f,
+                 CPotential *p, CFrame *fr,
+                 unsigned norbits, unsigned nbody,
+                 void *args) {
+    /* Here, the extra args are actually the array of CPotential objects that
+       represent the potentials of the individual particles.
+    */
+    CPotential *pp;
+
+    // Note: only really works with a static frame! This should be enforced
+    int i, j, k;
+    unsigned ndim = full_ndim / norbits; // phase-space dimensionality
+    double f2[ndim/2];
+    double NORM, u[3], q[3];
+    double Cfric, lnC, I, g, Rsat, Om, L[3], Lnorm, d2r, x, sigma, X;
+    double v_h2, r, rho0, rho, pars[3];
+
+    for (j=0; j < nbody; j++) { // the particles generating force
+        pp = ((CPotential **)args)[j];
+
+        if ((pp->null) == 1)
+            continue;
+
+        (pp->q0)[0] = &w[j*ndim];
+
+        NORM = sqrt(pow(w[j*ndim, 3], 2) + 
+                    pow(w[j*ndim, 4], 2) +
+                    pow(w[j*ndim, 5], 2));
+        u[0] = w[j*ndim, 3]/NORM;
+        u[1] = w[j*ndim, 4]/NORM;
+        u[2] = w[j*ndim, 5]/NORM;
+        q[0] = w[j*ndim, 0];
+        q[1] = w[j*ndim, 1];
+        q[2] = w[j*ndim, 2];
+        r = sqrt(q[0]*q[0] + q[1]*q[1] + q[2]*q[2]);
+
+        // Take the 3 first parameters of the Halo (assumed to be at 
+        // position 2 of CompositePotential).
+        pars[0] = p->parameters[2][0]; 
+        pars[1] = p->parameters[2][1];
+        pars[2] = p->parameters[2][2];
+
+        // Mass-loss goes here
+        // pp->parameters[i][1] = 0.99*pp->parameters[i][1];
+        // Compute Coulomb logarithm
+        // 0. Get the tidal radius (Rsat)
+        // Cross
+        L[0] = q[1]*u[2] - q[2]*u[1];
+        L[1] = -q[0]*u[2] + q[2]*u[0];
+        L[2] = q[0]*u[1] - q[1]*u[0];
+        Lnorm = sqrt(pow(L[0], 2) + 
+                     pow(L[1], 2) +
+                     pow(L[2], 2));
+        Om = Lnorm / pow(r, 2.); // Angular velocity
+        d2r = c_d2_dr2(p, t, q, &L[0]);
+
+        //This is the instantaneous tidal radius
+        Rsat = pow(pp->parameters[j][0] * pp->parameters[j][1] / (Om*Om - d2r), 1./3.);
+
+        // Compute mass loss
+        if (abs(t) < 0.000001) {
+            // If called twice from python, LOCALE changes... (ie decimal point from dot -> comma)
+            logfile = fopen("output.dat", "w");
+            setbuf(logfile, NULL);
+            RJ[j] = Rsat;
+            MASS[j] = pp->parameters[j][1];
+            printf("Initial RJ: %f", Rsat);
+        }
+        else if (t > 0) {
+            // Forward integration, mass is lost
+            if (Rsat < RJ[j]) {
+                // lose mass
+                pp->parameters[j][1] = pp->parameters[j][1] - HayashiML(Rsat, RJ[j], pp->parameters[j][1]/MASS[j], pp->parameters[j]);
+                // pp->parameters[j][1] = NFWML(Rsat, pp->parameters[j]);
+                printf("Updating RJ from, to: %f %f", RJ[j], Rsat);
+                RJ[j] = Rsat;
+            }
+            else {
+                //Tidal radius is larger, do nothing
+            }
+        }
+        else {
+            if (Rsat > RJ[j]) {
+                // gain mass
+                // pp->parameters[j][1] = pp->parameters[j][1]*pow(Rsat/RJ[j],1./2.);
+                pp->parameters[j][1] = pp->parameters[j][1] + HayashiML(RJ[j], Rsat, pp->parameters[j][1]/MASS[j], pp->parameters[j]);
+                // pp->parameters[j][1] = NFWML(Rsat, pp->parameters[j]);
+                RJ[j] = Rsat;
+            }
+            else {
+                //Tidal radius is smaller, do nothing
+            }
+        }
+
+        fprintf(logfile, "%f %f %f \n", t, pp->parameters[j][1], RJ[j]);
+        printf("Will print this to file: %f %f %f\r\n", t, pp->parameters[j][1], RJ[j]);
+    }
+    
+
+}
+
+double NFWML (double R, double *pars) {
+
+    double r0, rs, rte, ft;
+    double v_h2 = pars[0] * pars[1] / pars[2];
+    r0 = v_h2 / (4*M_PI*pars[0]* pow(pars[2], 2));
+    rs = pars[2];
+
+    return 4*M_PI*r0*pow(rs, 3.) * (log((rs + R)/rs) - R/(rs+R));
+
+
+}
+
+double HayashiML (double Ri, double Rf, double mbnd, double *pars) {
+
+    double r0, rs, rte, ft;
+    double v_h2 = pars[0] * pars[1] / pars[2];
+    r0 = v_h2 / (4*M_PI*pars[0]* pow(pars[2], 2));
+    rte = exp(1.02 + 1.38*log(mbnd) + 0.37*pow(log(mbnd), 2));
+    ft = exp(-0.007 + 0.35*log(mbnd) + 0.39*pow(log(mbnd), 2) + 0.23*pow(log(mbnd), 3));
+    rs = pars[2];
+
+      return 4*M_PI*(ft*r0*pow(rs,3)*pow(rte,2)*(6*Rf*pow(rs,4)*rte - 6*Ri*pow(rs,4)*rte - 6*Rf*rs*pow(rte,4) + 
+       6*Ri*rs*pow(rte,4) + 2*sqrt(3)*rs*(Rf + rs)*(Ri + rs)*pow(rs - rte,2)*(rs + 2*rte)*
+        atan((2*Rf - rte)/(sqrt(3)*rte)) - 2*sqrt(3)*rs*(Rf + rs)*(Ri + rs)*pow(rs - rte,2)*(rs + 2*rte)*
+        atan((2*Ri - rte)/(sqrt(3)*rte)) + 12*Rf*Ri*pow(rs,3)*rte*log(Rf + rs) + 12*Rf*pow(rs,4)*rte*log(Rf + rs) + 
+       12*Ri*pow(rs,4)*rte*log(Rf + rs) + 12*pow(rs,5)*rte*log(Rf + rs) + 6*Rf*Ri*pow(rte,4)*log(Rf + rs) + 
+       6*Rf*rs*pow(rte,4)*log(Rf + rs) + 6*Ri*rs*pow(rte,4)*log(Rf + rs) + 6*pow(rs,2)*pow(rte,4)*log(Rf + rs) - 
+       12*Rf*Ri*pow(rs,3)*rte*log(Ri + rs) - 12*Rf*pow(rs,4)*rte*log(Ri + rs) - 12*Ri*pow(rs,4)*rte*log(Ri + rs) - 
+       12*pow(rs,5)*rte*log(Ri + rs) - 6*Rf*Ri*pow(rte,4)*log(Ri + rs) - 6*Rf*rs*pow(rte,4)*log(Ri + rs) - 
+       6*Ri*rs*pow(rte,4)*log(Ri + rs) - 6*pow(rs,2)*pow(rte,4)*log(Ri + rs) - 2*Rf*Ri*pow(rs,4)*log(Rf + rte) - 
+       2*Rf*pow(rs,5)*log(Rf + rte) - 2*Ri*pow(rs,5)*log(Rf + rte) - 2*pow(rs,6)*log(Rf + rte) - 
+       6*Rf*Ri*pow(rs,2)*pow(rte,2)*log(Rf + rte) - 6*Rf*pow(rs,3)*pow(rte,2)*log(Rf + rte) - 
+       6*Ri*pow(rs,3)*pow(rte,2)*log(Rf + rte) - 6*pow(rs,4)*pow(rte,2)*log(Rf + rte) - 
+       4*Rf*Ri*rs*pow(rte,3)*log(Rf + rte) - 4*Rf*pow(rs,2)*pow(rte,3)*log(Rf + rte) - 
+       4*Ri*pow(rs,2)*pow(rte,3)*log(Rf + rte) - 4*pow(rs,3)*pow(rte,3)*log(Rf + rte) + 
+       2*Rf*Ri*pow(rs,4)*log(Ri + rte) + 2*Rf*pow(rs,5)*log(Ri + rte) + 2*Ri*pow(rs,5)*log(Ri + rte) + 
+       2*pow(rs,6)*log(Ri + rte) + 6*Rf*Ri*pow(rs,2)*pow(rte,2)*log(Ri + rte) + 
+       6*Rf*pow(rs,3)*pow(rte,2)*log(Ri + rte) + 6*Ri*pow(rs,3)*pow(rte,2)*log(Ri + rte) + 
+       6*pow(rs,4)*pow(rte,2)*log(Ri + rte) + 4*Rf*Ri*rs*pow(rte,3)*log(Ri + rte) + 
+       4*Rf*pow(rs,2)*pow(rte,3)*log(Ri + rte) + 4*Ri*pow(rs,2)*pow(rte,3)*log(Ri + rte) + 
+       4*pow(rs,3)*pow(rte,3)*log(Ri + rte) + Rf*Ri*pow(rs,4)*log(pow(Rf,2) - Rf*rte + pow(rte,2)) + 
+       Rf*pow(rs,5)*log(pow(Rf,2) - Rf*rte + pow(rte,2)) + Ri*pow(rs,5)*log(pow(Rf,2) - Rf*rte + pow(rte,2)) + 
+       pow(rs,6)*log(pow(Rf,2) - Rf*rte + pow(rte,2)) + 
+       3*Rf*Ri*pow(rs,2)*pow(rte,2)*log(pow(Rf,2) - Rf*rte + pow(rte,2)) + 
+       3*Rf*pow(rs,3)*pow(rte,2)*log(pow(Rf,2) - Rf*rte + pow(rte,2)) + 
+       3*Ri*pow(rs,3)*pow(rte,2)*log(pow(Rf,2) - Rf*rte + pow(rte,2)) + 
+       3*pow(rs,4)*pow(rte,2)*log(pow(Rf,2) - Rf*rte + pow(rte,2)) + 
+       2*Rf*Ri*rs*pow(rte,3)*log(pow(Rf,2) - Rf*rte + pow(rte,2)) + 
+       2*Rf*pow(rs,2)*pow(rte,3)*log(pow(Rf,2) - Rf*rte + pow(rte,2)) + 
+       2*Ri*pow(rs,2)*pow(rte,3)*log(pow(Rf,2) - Rf*rte + pow(rte,2)) + 
+       2*pow(rs,3)*pow(rte,3)*log(pow(Rf,2) - Rf*rte + pow(rte,2)) - 
+       Rf*Ri*pow(rs,4)*log(pow(Ri,2) - Ri*rte + pow(rte,2)) - 
+       Rf*pow(rs,5)*log(pow(Ri,2) - Ri*rte + pow(rte,2)) - Ri*pow(rs,5)*log(pow(Ri,2) - Ri*rte + pow(rte,2)) - 
+       pow(rs,6)*log(pow(Ri,2) - Ri*rte + pow(rte,2)) - 
+       3*Rf*Ri*pow(rs,2)*pow(rte,2)*log(pow(Ri,2) - Ri*rte + pow(rte,2)) - 
+       3*Rf*pow(rs,3)*pow(rte,2)*log(pow(Ri,2) - Ri*rte + pow(rte,2)) - 
+       3*Ri*pow(rs,3)*pow(rte,2)*log(pow(Ri,2) - Ri*rte + pow(rte,2)) - 
+       3*pow(rs,4)*pow(rte,2)*log(pow(Ri,2) - Ri*rte + pow(rte,2)) - 
+       2*Rf*Ri*rs*pow(rte,3)*log(pow(Ri,2) - Ri*rte + pow(rte,2)) - 
+       2*Rf*pow(rs,2)*pow(rte,3)*log(pow(Ri,2) - Ri*rte + pow(rte,2)) - 
+       2*Ri*pow(rs,2)*pow(rte,3)*log(pow(Ri,2) - Ri*rte + pow(rte,2)) - 
+       2*pow(rs,3)*pow(rte,3)*log(pow(Ri,2) - Ri*rte + pow(rte,2)) - 
+       4*Rf*Ri*pow(rs,3)*rte*log(pow(Rf,3) + pow(rte,3)) - 4*Rf*pow(rs,4)*rte*log(pow(Rf,3) + pow(rte,3)) - 
+       4*Ri*pow(rs,4)*rte*log(pow(Rf,3) + pow(rte,3)) - 4*pow(rs,5)*rte*log(pow(Rf,3) + pow(rte,3)) - 
+       2*Rf*Ri*pow(rte,4)*log(pow(Rf,3) + pow(rte,3)) - 2*Rf*rs*pow(rte,4)*log(pow(Rf,3) + pow(rte,3)) - 
+       2*Ri*rs*pow(rte,4)*log(pow(Rf,3) + pow(rte,3)) - 2*pow(rs,2)*pow(rte,4)*log(pow(Rf,3) + pow(rte,3)) + 
+       4*Rf*Ri*pow(rs,3)*rte*log(pow(Ri,3) + pow(rte,3)) + 4*Rf*pow(rs,4)*rte*log(pow(Ri,3) + pow(rte,3)) + 
+       4*Ri*pow(rs,4)*rte*log(pow(Ri,3) + pow(rte,3)) + 4*pow(rs,5)*rte*log(pow(Ri,3) + pow(rte,3)) + 
+       2*Rf*Ri*pow(rte,4)*log(pow(Ri,3) + pow(rte,3)) + 2*Rf*rs*pow(rte,4)*log(pow(Ri,3) + pow(rte,3)) + 
+       2*Ri*rs*pow(rte,4)*log(pow(Ri,3) + pow(rte,3)) + 2*pow(rs,2)*pow(rte,4)*log(pow(Ri,3) + pow(rte,3))))/
+       (6.*(Rf + rs)*(Ri + rs)*pow(pow(rs,3) - pow(rte,3),2));
+
+}
+
+
 
 /* Needed for Lyapunov */
 double six_norm (double *x) {
