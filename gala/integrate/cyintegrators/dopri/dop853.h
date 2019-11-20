@@ -246,3 +246,8 @@ extern void Fwrapper_direct_nbody(unsigned ndim, double t, double *w, double *f,
                                   unsigned norbits, unsigned nbody,
                                   void *args); // here args becomes the particle potentials
 extern double six_norm (double *x); /* Needed for Lyapunov */
+
+extern void UpdateMass(unsigned ndim, double t, double *w, double *f,
+                       CPotential *p, CFrame *fr,
+                       unsigned norbits, unsigned nbody,
+                       void *args); // here args becomes the particle potentials

@@ -4,7 +4,9 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <memory.h>
+#include <locale.h>
 #include "dop853.h"
+
 
 
 static long      nfcn, nstep, naccpt, nrejct;
@@ -13,6 +15,107 @@ static unsigned  nrds, *indir;
 static double    *yy1, *k1, *k2, *k3, *k4, *k5, *k6, *k7, *k8, *k9, *k10;
 static double    *rcont1, *rcont2, *rcont3, *rcont4;
 static double    *rcont5, *rcont6, *rcont7, *rcont8;
+
+// Global cheating
+static FILE *logfile;
+double MASS, RJ[1];
+
+void UpdateMass (unsigned full_ndim, double t, double *w, double *f,
+                 CPotential *p, CFrame *fr,
+                 unsigned norbits, unsigned nbody,
+                 void *args) {
+    /* Here, the extra args are actually the array of CPotential objects that
+       represent the potentials of the individual particles.
+    */
+    CPotential *pp;
+
+    // Note: only really works with a static frame! This should be enforced
+    int i, j, k;
+    unsigned ndim = full_ndim / norbits; // phase-space dimensionality
+    double f2[ndim/2];
+    double NORM, u[3], q[3];
+    double Cfric, lnC, I, g, Rsat, Om, L[3], Lnorm, d2r, x, sigma, X;
+    double v_h2, r, rho0, rho, pars[3];
+
+    for (j=0; j < nbody; j++) { // the particles generating force
+        pp = ((CPotential **)args)[j];
+
+        if ((pp->null) == 1)
+            continue;
+
+        (pp->q0)[0] = &w[j*ndim];
+
+        NORM = sqrt(pow(w[j*ndim, 3], 2) + 
+                    pow(w[j*ndim, 4], 2) +
+                    pow(w[j*ndim, 5], 2));
+        u[0] = w[j*ndim, 3]/NORM;
+        u[1] = w[j*ndim, 4]/NORM;
+        u[2] = w[j*ndim, 5]/NORM;
+        q[0] = w[j*ndim, 0];
+        q[1] = w[j*ndim, 1];
+        q[2] = w[j*ndim, 2];
+        r = sqrt(q[0]*q[0] + q[1]*q[1] + q[2]*q[2]);
+
+        // Take the 3 first parameters of the Halo (assumed to be at 
+        // position 2 of CompositePotential).
+        pars[0] = p->parameters[2][0]; 
+        pars[1] = p->parameters[2][1];
+        pars[2] = p->parameters[2][2];
+
+        // Mass-loss goes here
+        // pp->parameters[i][1] = 0.99*pp->parameters[i][1];
+        // Compute Coulomb logarithm
+        // 0. Get the tidal radius (Rsat)
+        // Cross
+        L[0] = q[1]*u[2] - q[2]*u[1];
+        L[1] = -q[0]*u[2] + q[2]*u[0];
+        L[2] = q[0]*u[1] - q[1]*u[0];
+        Lnorm = sqrt(pow(L[0], 2) + 
+                     pow(L[1], 2) +
+                     pow(L[2], 2));
+        Om = Lnorm / pow(r, 2.); // Angular velocity
+        d2r = c_d2_dr2(p, t, q, &L[0]);
+
+        //This is the instantaneous tidal radius
+        Rsat = pow(pp->parameters[j][0] * pp->parameters[j][1] / (Om*Om - d2r), 1./3.);
+
+        // Compute mass loss
+        if (abs(t) < 0.000001) {
+            setlocale(LC_NUMERIC, "French_Canada.1252"); //OMG what am I doing?
+            logfile = fopen("output.dat", "w");
+            setbuf(logfile, NULL);
+            RJ[j] = Rsat;
+            printf("Initial RJ: %f", Rsat);
+        }
+        else if (t > 0) {
+            // Forward integration, mass is lost
+            if (Rsat < RJ[j]) {
+                // lose mass
+                pp->parameters[j][1] = pp->parameters[j][1]*pow(Rsat/RJ[j],1./2.);
+                printf("Updating RJ from, to: %f %f", RJ[j], Rsat);
+                RJ[j] = Rsat;
+            }
+            else {
+                //Tidal radius is larger, do nothing
+            }
+        }
+        else {
+            if (Rsat > RJ[j]) {
+                // gain mass
+                pp->parameters[j][1] = pp->parameters[j][1]*pow(Rsat/RJ[j],1./2.);
+                RJ[j] = Rsat;
+            }
+            else {
+                //Tidal radius is smaller, do nothing
+            }
+        }
+
+        fprintf(logfile, "%f %f %f \n", t, pp->parameters[j][1], RJ[j]);
+        printf("Will print this to file: %f %f %f\r\n", t, pp->parameters[j][1], RJ[j]);
+    }
+    
+
+}
 
 
 long nfcnRead (void)
@@ -373,8 +476,12 @@ static int dopcor (unsigned n, FcnEqDiff fcn, CPotential *p, CFrame *fr, unsigne
   fcn (n, x, y, k1, p, fr, norbits, nbody, args);
   hmax = fabs (hmax);
   iord = 8;
-  if (h == 0.0)
+  if (h == 0.0) {
     h = hinit (n, fcn, p, fr, norbits, nbody, args, x, y, posneg, k1, k2, k3, iord, hmax, atoler, rtoler, itoler);
+    //UpdateMass(n, x, y, k1, p, fr, norbits, nbody, args);
+  }
+
+ 
   nfcn += 2;
   reject = 0;
   xold = x;
@@ -519,6 +626,8 @@ static int dopcor (unsigned n, FcnEqDiff fcn, CPotential *p, CFrame *fr, unsigne
       naccpt++;
       fcn (n, xph, k5, k4, p, fr, norbits, nbody, args);
       nfcn++;
+      //printf("STEP ACCEPTED \n");
+      UpdateMass(n, xph, k5, k4, p, fr, norbits, nbody, args);
 
       /* stiffness detection */
       if (!(naccpt % nstiff) || (iasti > 0))
@@ -943,6 +1052,7 @@ int dop853
     }
 
     return idid;
+    fclose(logfile);
   }
 
 } /* dop853 */
@@ -1051,17 +1161,17 @@ void Fwrapper_direct_nbody (unsigned full_ndim, double t, double *w, double *f,
                 // Mass-loss goes here
                 // pp->parameters[i][1] = 0.99*pp->parameters[i][1];
 
-                printf("Time = %f \n", t);
-                printf("Mass, Rs = %f %f\n", pp->parameters[i][1], pp->parameters[i][2]);
-                printf("halo G, par1, par2 = %.10e, %f, %f\n", p->parameters[2][0],
-                                                               p->parameters[2][1],
-                                                               p->parameters[2][2]);
+                //printf("Time = %f \n", t);
+                //printf("Mass, Rs = %f %f\n", pp->parameters[i][1], pp->parameters[i][2]);
+                //printf("halo G, par1, par2 = %.10e, %f, %f\n", p->parameters[2][0],
+                //                                               p->parameters[2][1],
+                //                                               p->parameters[2][2]);
 
                 // Compute NFW density, assuming spherical (only analytic?)
                 v_h2 = pars[0] * pars[1] / pars[2];
                 rho0 = v_h2 / (4*M_PI*pars[0]*pars[2]*pars[2]);
                 rho = rho0 / ((r/pars[2]) * pow(1+r/pars[2],2));
-                printf("Halo density: %f\n", rho);
+                //printf("Halo density: %f\n", rho);
 
                 // Compute Coulomb logarithm
                 // 0. Get the tidal radius (Rsat)
@@ -1088,7 +1198,7 @@ void Fwrapper_direct_nbody (unsigned full_ndim, double t, double *w, double *f,
 
                 g = log(1+x) - (x / (1+x));
                 lnC = log(r/Rsat) + I/pow(g,2);
-                printf("Sat RJ, lnC: %f, %f\n", Rsat, lnC);
+//                printf("Sat RJ, lnC: %f, %f\n", Rsat, lnC);
 
                 // 2. Compute Sigma(r/rs)
                 sigma = 134. * 1.4393 * pow(r/pars[2], 0.354) / (1. + 1.1756*pow(r/pars[2], 0.725));
