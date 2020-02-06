@@ -104,13 +104,18 @@ cdef extern from "potential/potential/builtin/builtin_potentials.h":
     double longmuralibar_value(double t, double *pars, double *q, int n_dim) nogil
     void longmuralibar_gradient(double t, double *pars, double *q, int n_dim, double *grad) nogil
     double longmuralibar_density(double t, double *pars, double *q, int n_dim) nogil
+    
+    double customnfw_value(double t, double *pars, double *q, int n_dim) nogil
+    void customnfw_gradient(double t, double *pars, double *q, int n_dim, double *grad) nogil
+    double customnfw_density(double t, double *pars, double *q, int n_dim) nogil
+    void customnfw_hessian(double t, double *pars, double *q, int n_dim, double *hess) nogil
 
 __all__ = ['NullPotential', 'HenonHeilesPotential', # Misc. potentials
            'KeplerPotential', 'HernquistPotential', 'IsochronePotential', 'PlummerPotential',
            'JaffePotential', 'StonePotential', 'PowerLawCutoffPotential', # Spherical models
            'SatohPotential', 'MiyamotoNagaiPotential', # Disk models
            'NFWPotential', 'LeeSutoTriaxialNFWPotential', 'LogarithmicPotential', 'VeraCiroPotential',
-           'LongMuraliBarPotential', # Triaxial models
+           'LongMuraliBarPotential','NFWtimedep', # Triaxial models
            ]
 
 # ============================================================================
@@ -967,7 +972,134 @@ class LongMuraliBarPotential(CPotentialBase):
         super(LongMuraliBarPotential, self).__init__(
             parameters=parameters, units=units, origin=origin, R=R)
 
+        
+cdef class customNFWWrapper(CPotentialWrapper):
 
+    def __init__(self, G, parameters, q0, R):
+        self.init([G] + list(parameters),
+                  np.ascontiguousarray(q0),
+                  np.ascontiguousarray(R))
+        self.cpotential.value[0] = <energyfunc>(customnfw_value)
+        self.cpotential.density[0] = <densityfunc>(customnfw_density)
+        self.cpotential.gradient[0] = <gradientfunc>(customnfw_gradient)
+        self.cpotential.hessian[0] = <hessianfunc>(customnfw_hessian)
+        
+
+@format_doc(common_doc=_potential_docstring)
+class NFWtimedep(CPotentialBase):
+    r"""
+    NFWPotential(m, r_s, a=1, b=1, c=1, df=False, units=None, origin=None, R=None)
+
+    General Navarro-Frenk-White potential. Supports spherical, flattened, and
+    triaxiality but the flattening is introduced into the potential, not the
+    density, and can therefore lead to unphysical mass distributions. For a
+    triaxial NFW potential that supports flattening in the density, see
+    :class:`gala.potential.LeeSutoTriaxialNFWPotential`.
+
+    Parameters
+    ----------
+    m : :class:`~astropy.units.Quantity`, numeric [mass]
+        Scale mass.
+    r_s : :class:`~astropy.units.Quantity`, numeric [length]
+        Scale radius.
+    a : numeric
+        Major axis scale.
+    b : numeric
+        Intermediate axis scale.
+    c : numeric
+        Minor axis scale.
+    df: bool
+        If True, this body will feel Dynamical Friction (for now, only available in NbodyDirect
+        and for a=b=c=1)
+    {common_doc}
+    """
+    _physical_types = {'m': 'mass',
+                       'r_s': 'length',
+                       'a': 'dimensionless',
+                       'b': 'dimensionless',
+                       'c': 'dimensionless'}
+
+    def __init__(self, m=None, r_s=None, a=1., b=1., c=1.,df=False, v_c=None, units=None,
+                 origin=None, R=None):
+        parameters = OrderedDict()
+        parameters['m'] = m
+        parameters['r_s'] = r_s
+
+        if np.allclose([a, b, c], 1.):
+            NFWWrapper = customNFWWrapper
+            parameters['df'] = df
+
+        elif np.allclose([a, b], 1.):
+            NFWWrapper = FlattenedNFWWrapper
+            parameters['c'] = c
+
+        else:
+            NFWWrapper = TriaxialNFWWrapper
+            parameters['a'] = a
+            parameters['b'] = b
+            parameters['c'] = c
+
+        super(NFWtimedep, self).__init__(parameters=parameters,
+                                           units=units,
+                                           Wrapper=NFWWrapper,
+                                           origin=origin,
+                                           R=R)
+
+    def to_latex(self):
+        return r"\Phi(r) = -\frac{v_c^2}{\sqrt{\ln 2 - \frac{1}{2}}} \frac{\ln(1 + r/r_s)}{r/r_s}"
+
+    @staticmethod
+    def from_circular_velocity(v_c, r_s, a=1., b=1., c=1.,df=False, r_ref=None,
+                               units=None, origin=None, R=None):
+        r"""
+        from_circular_velocity(v_c, r_s, a=1., b=1., c=1., r_ref=None, units=None, origin=None, R=None)
+
+        Initialize an NFW potential from a circular velocity, scale radius, and
+        reference radius for the circular velocity.
+
+        For scale mass :math:`m_s`, scale radius :math:`r_s`, scaled
+        reference radius :math:`u_{\rm ref} = r_{\rm ref}/r_s`:
+
+        .. math::
+
+            \frac{G\,m_s}{r_s} = \frac{v_c^2}{u_{\rm ref}} \,
+                \left[\frac{u_{\rm ref}}{1+u_{\rm ref}} -
+                \frac{\ln(1+u_{\rm ref})}{u_{\rm ref}^2} \right]^{-1}
+
+        Parameters
+        ----------
+        v_c : :class:`~astropy.units.Quantity`, numeric [velocity]
+            Circular velocity at the reference radius ``r_ref`` (see below).
+        r_s : :class:`~astropy.units.Quantity`, numeric [length]
+            Scale radius.
+        
+        r_ref : :class:`~astropy.units.Quantity`, numeric [length] (optional)
+            Reference radius at which the circular velocity is given. By default,
+            this is assumed to be the scale radius, ``r_s``.
+
+        """
+
+        if not hasattr(v_c, 'unit'):
+            v_c = v_c * units['length'] / units['time']
+
+        if not hasattr(r_s, 'unit'):
+            r_s = r_s * units['length']
+
+        if r_ref is None:
+            r_ref = r_s
+
+        m = NFWtimedep._vc_rs_rref_to_m(v_c, r_s, r_ref)
+        m = m.to(units['mass'])
+
+        return NFWtimedep(m=m, r_s=r_s, a=a, b=b, c=c,df=df,
+                            units=units, origin=origin, R=R)
+
+    @staticmethod
+    def _vc_rs_rref_to_m(v_c, r_s, r_ref):
+        uu = r_ref / r_s
+        vs2 = v_c**2 / uu / (np.log(1+uu)/uu**2 - 1/(uu*(1+uu)))
+        return (r_s*vs2 / G)
+        
 # ==============================================================================
 # Special
 #

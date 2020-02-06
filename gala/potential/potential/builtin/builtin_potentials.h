@@ -76,3 +76,8 @@ extern void veraciro_gradient(double t, double *pars, double *q, int n_dim, doub
 extern double longmuralibar_value(double t, double *pars, double *q, int n_dim);
 extern void longmuralibar_gradient(double t, double *pars, double *q, int n_dim, double *grad);
 extern double longmuralibar_density(double t, double *pars, double *q, int n_dim);
+
+extern double customnfw_value(double t, double *pars, double *q, int n_dim);
+extern void customnfw_gradient(double t, double *pars, double *q, int n_dim, double *grad);
+extern double customnfw_density(double t, double *pars, double *q, int n_dim);
+extern void customnfw_hessian(double t, double *pars, double *q, int n_dim, double *hess);

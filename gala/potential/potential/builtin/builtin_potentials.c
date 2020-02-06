@@ -1196,3 +1196,90 @@ double longmuralibar_density(double t, double *pars, double *q, int n_dim) {
         tmp20*tmp33 - 2*tmp25*tmp27*tmp36 - tmp28*tmp38 - tmp29*(-tmp22*tmp31 +
         1) - tmp29 - tmp35*tmp40 - tmp35*(-2*tmp0*tmp13 + 2))/(M_PI*a);
 }
+
+
+/* ---------------------------------------------------------------------------
+    Spherical NFW - custom: adds switches for Dynamical friction and mass loss
+*/
+double customnfw_value(double t, double *pars, double *q, int n_dim) {
+    /*  pars:
+            - G (Gravitational constant)
+            - m (mass scale)
+            - r_s (scale radius)
+            - df (bool, True if dynamical friction affects this body)
+    */
+    double u, v_h2;
+    // v_h2 = pars[1]*pars[1] / (log(2.) - 0.5);
+    v_h2 = -pars[0] * pars[1] / pars[2];
+    u = sqrt(q[0]*q[0] + q[1]*q[1] + q[2]*q[2]) / pars[2];
+    return v_h2 * log(1 + u) / u;
+}
+
+void customnfw_gradient(double t, double *pars, double *q, int n_dim, double *grad) {
+    /*  pars:
+            - G (Gravitational constant)
+            - m (mass scale)
+            - r_s (scale radius)
+            - df (bool, True if dynamical friction affects this body)
+    */
+    double fac, u, v_h2;
+    // v_h2 = pars[1]*pars[1] / (log(2.) - 0.5);
+    v_h2 = pars[0] * pars[1] / pars[2];
+
+    u = sqrt(q[0]*q[0] + q[1]*q[1] + q[2]*q[2]) / pars[2];
+    fac = v_h2 / (u*u*u) / (pars[2]*pars[2]) * (log(1+u) - u/(1+u));
+
+    grad[0] = grad[0] + fac*q[0];
+    grad[1] = grad[1] + fac*q[1];
+    grad[2] = grad[2] + fac*q[2];
+}
+
+double customnfw_density(double t, double *pars, double *q, int n_dim) {
+    /*  pars:
+            - G (Gravitational constant)
+            - m (mass scale)
+            - r_s (scale radius)
+            - df (bool, True if dynamical friction affects this body)
+    */
+    // double v_h2 = pars[1]*pars[1] / (log(2.) - 0.5);
+    double v_h2 = pars[0] * pars[1] / pars[2];
+    double r, rho0;
+    r = sqrt(q[0]*q[0] + q[1]*q[1] + q[2]*q[2]);
+
+    rho0 = v_h2 / (4*M_PI*pars[0]*pars[2]*pars[2]);
+    return rho0 / ((r/pars[2]) * pow(1+r/pars[2],2));
+}
+
+double customnfw_hessian(double t, double *pars, double *q, int n_dim, double *hess) {
+  /*  pars:
+        - G (Gravitational constant)
+        - m (mass scale)
+        - r_s (scale radius)
+        - df (bool, True if dynamical friction affects this body)
+  */
+  // double v_h2 = pars[1]*pars[1] / (log(2.) - 0.5);
+  double v_h2 = -pars[0] * pars[1] / pars[2];
+  double rs = pars[2];
+
+  double x = q[0];
+  double y = q[1];
+  double z = q[2];
+  double r = sqrt(x*x + y*y + z*z);
+  double r2 = r*r;
+  double r3 = r2*r;
+  double r4 = r3*r;
+  double r5 = r4*r;
+  double rrs1 = r/rs + 1.0;
+  double ll = log(rrs1);
+
+  hess[0] = hess[0] + v_h2*(-1./(r2*rrs1) + rs/r3*ll + x*x/(r3*rs*rrs1*rrs1) + 3.*x*x/(r4*rrs1) - 3.*rs/r5*x*x*ll);
+  hess[1] = hess[1] + v_h2*(x*y/(r3*rs*rrs1*rrs1) + 3.*x*y/(r4*rrs1) - 3.*rs/r5*x*y*ll);
+  hess[2] = hess[2] + v_h2*(x*z/(r3*rs*rrs1*rrs1) + 3.*x*z/(r4*rrs1) - 3.*rs/r5*x*z*ll);
+  hess[3] = hess[3] + v_h2*(x*y/(r3*rs*rrs1*rrs1) + 3.*x*y/(r4*rrs1) - 3.*rs/r5*x*y*ll);
+  hess[4] = hess[4] + v_h2*(-1./(r2*rrs1) + rs/r3*ll + y*y/(r3*rs*rrs1*rrs1) + 3.*y*y/(r4*rrs1) - 3.*rs/r5*y*y*ll);
+  hess[5] = hess[5] + v_h2*(y*z/(r3*rs*rrs1*rrs1) + 3.*y*z/(r4*rrs1) - 3.*rs/r5*y*z*ll);
+  hess[6] = hess[6] + v_h2*(x*z/(r3*rs*rrs1*rrs1) + 3.*x*z/(r4*rrs1) - 3.*rs/r5*x*z*ll);
+  hess[7] = hess[7] + v_h2*(y*z/(r3*rs*rrs1*rrs1) + 3.*y*z/(r4*rrs1) - 3.*rs/r5*y*z*ll);
+  hess[8] = hess[8] + v_h2*(-1./(r2*rrs1) + rs/r3*ll + z*z/(r3*rs*rrs1*rrs1) + 3.*z*z/(r4*rrs1) - 3.*rs/r5*z*z*ll);
+
+}
