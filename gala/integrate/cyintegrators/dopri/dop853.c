@@ -1017,7 +1017,8 @@ void Fwrapper_direct_nbody (unsigned full_ndim, double t, double *w, double *f,
     // Note: only really works with a static frame! This should be enforced
     int i, j, k;
     unsigned ndim = full_ndim / norbits; // phase-space dimensionality
-    double f2[ndim/2];
+    double f2[p->n_dim];
+    double eps[p->n_dim];
     double NORM, u[3], q[3];
     double Cfric, lnC, I, g, Rsat, Om, L[3], Lnorm, d2r, x, sigma, X;
     double v_h2, r, rho0, rho, pars[3];
@@ -1099,7 +1100,8 @@ void Fwrapper_direct_nbody (unsigned full_ndim, double t, double *w, double *f,
                 //This is the instantaneous tidal radius
                 //Rsat = pow(pp->parameters[i][0] * pp->parameters[i][1] / (Om*Om - d2r), 1./3.);
 		// hardcoded tidal radius = r * (Msat/Mhost/2)^(1/3), where Mhost is the mass of the three component galaxy
-                Rsat = pow((pp->parameters[0][1])/(p->parameters[0][1] + p->parameters[1][1] + p->parameters[2][1])/2, 1./3.)*r;
+		//printf("\n--------R: %f // Total mass: %e //  Mass ecnlosed: %f -------------\n",r,p->parameters[0][1] + p->parameters[1][1] + p->parameters[2][1],c_mass_enclosed(p,t, &w[i*ndim],pars[0], &eps[0]));
+                Rsat = pow((pp->parameters[0][1])/(c_mass_enclosed(p,t, &w[i*ndim],pars[0], &eps[0]))/2, 1./3.)*r;
                 //Rsat = 1.0;
 
                 // 1. Compute I
