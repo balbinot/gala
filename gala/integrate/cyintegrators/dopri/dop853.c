@@ -1033,6 +1033,7 @@ void Fwrapper_direct_nbody (unsigned full_ndim, double t, double *w, double *f,
         if ((pp->null) == 1)
             continue;
 
+        // Be carefull ndim != n_dim; thanks apw
         (pp->q0)[0] = &w[j*ndim];
 
         for (i=0; i < norbits; i++) {
@@ -1048,18 +1049,18 @@ void Fwrapper_direct_nbody (unsigned full_ndim, double t, double *w, double *f,
 		//Check if the particle has the Dynamical Friction activated
 		//NOTE: currently this is only available for NFWtimedep potential. Any other potential will crash. Hardcoded
 		//printf("%f",pp->parameters[i][3]);
-		if ((pp->parameters[i][3]) == 0.)
+		if ((pp->parameters[0][3]) != 1.)
 			continue;
-                NORM = sqrt(pow(w[i*ndim, 3], 2) + 
-                            pow(w[i*ndim, 4], 2) +
-                            pow(w[i*ndim, 5], 2));
-                u[0] = w[i*ndim, 3]/NORM;
-                u[1] = w[i*ndim, 4]/NORM;
-                u[2] = w[i*ndim, 5]/NORM;
-
-                q[0] = w[i*ndim, 0];
-                q[1] = w[i*ndim, 1];
-                q[2] = w[i*ndim, 2];
+                // This assumes n_dim == 3 always;
+                NORM = sqrt(pow(w[i*ndim + pp->n_dim + 0], 2) + 
+                            pow(w[i*ndim + pp->n_dim + 1], 2) +
+                            pow(w[i*ndim + pp->n_dim + 2], 2));
+                u[0] = w[i*ndim + pp->n_dim + 0]/NORM;
+                u[1] = w[i*ndim + pp->n_dim + 1]/NORM;
+                u[2] = w[i*ndim + pp->n_dim + 2]/NORM;
+                q[0] = w[i*ndim+0];
+                q[1] = w[i*ndim+1];
+                q[2] = w[i*ndim+2];
                 r = sqrt(q[0]*q[0] + q[1]*q[1] + q[2]*q[2]);
 
                 // Take the 3 first parameters of the Halo (assumed to be at 
@@ -1070,7 +1071,6 @@ void Fwrapper_direct_nbody (unsigned full_ndim, double t, double *w, double *f,
 
                 // Mass-loss goes here
                 // pp->parameters[i][1] = 0.99*pp->parameters[i][1];
-
                 //printf("Time = %f \n", t);
                 //printf("Mass, Rs = %f %f\n", pp->parameters[i][1], pp->parameters[i][2]);
                 //printf("halo G, par1, par2 = %.10e, %f, %f\n", p->parameters[2][0],
@@ -1078,7 +1078,7 @@ void Fwrapper_direct_nbody (unsigned full_ndim, double t, double *w, double *f,
                 //                                               p->parameters[2][2]);
 
                 // Compute NFW density, assuming spherical (only analytic?). 
-		// TO-DO: obtain from the potential itself using GALA
+		        // TO-DO: obtain from the potential itself using GALA
                 v_h2 = pars[0] * pars[1] / pars[2];
                 rho0 = v_h2 / (4*M_PI*pars[0]*pars[2]*pars[2]);
                 rho = rho0 / ((r/pars[2]) * pow(1+r/pars[2],2));
@@ -1099,12 +1099,12 @@ void Fwrapper_direct_nbody (unsigned full_ndim, double t, double *w, double *f,
                 //This is the instantaneous tidal radius
                 //Rsat = pow(pp->parameters[i][0] * pp->parameters[i][1] / (Om*Om - d2r), 1./3.);
 		// hardcoded tidal radius = r * (Msat/Mhost/2)^(1/3), where Mhost is the mass of the three component galaxy
-                Rsat = pow((pp->parameters[i][1])/(p->parameters[0][1] + p->parameters[1][1] + p->parameters[2][1])/2, 1./3.)*r;
+                Rsat = pow((pp->parameters[0][1])/(p->parameters[0][1] + p->parameters[1][1] + p->parameters[2][1])/2, 1./3.)*r;
                 //Rsat = 1.0;
 
                 // 1. Compute I
 		//hardcoded and only usable for potentials whose second parameter is the scale radius
-                x = Rsat/pp->parameters[i][2];
+                x = Rsat/pp->parameters[0][2];
 
                 I = 0.10947 * pow(x, 3.989) / 
                     ( 1 + 0.90055*pow(x, 1.099) + 0.03568*pow(x, 1.189) + 0.06403*pow(x, 1.989));
@@ -1119,7 +1119,7 @@ void Fwrapper_direct_nbody (unsigned full_ndim, double t, double *w, double *f,
 
                 // 3. Get friction
                 X = NORM/sqrt(2.)/sigma;
-                Cfric = 4*M_PI * lnC * pow(pars[0], 2.) * (pp->parameters[i][1]) * rho / pow(NORM, 2.);
+                Cfric = 4*M_PI * lnC * pow(pars[0], 2.) * (pp->parameters[0][1]) * rho / pow(NORM, 2.);
                 Cfric = Cfric*(erf(X) - 2*X/sqrt(M_PI)*exp(-pow(X, 2)));
 		//printf("%f, %f, %f, %f, %f, %e\n",Rsat,pow(pp->parameters[i][0] * pp->parameters[i][1] / (Om*Om - d2r), 1./3.),lnC,NORM,sigma,Cfric);
 
