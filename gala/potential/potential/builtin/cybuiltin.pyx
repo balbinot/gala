@@ -988,7 +988,7 @@ cdef class customNFWWrapper(CPotentialWrapper):
 @format_doc(common_doc=_potential_docstring)
 class NFWtimedep(CPotentialBase):
     r"""
-    NFWPotential(m, r_s, a=1, b=1, c=1, df=False, units=None, origin=None, R=None)
+    NFWPotential(m, r_s, a=1, b=1, c=1, df=False,ml=1, units=None, origin=None, R=None)
 
     General Navarro-Frenk-White potential. Supports spherical, flattened, and
     triaxiality but the flattening is introduced into the potential, not the
@@ -1011,15 +1011,19 @@ class NFWtimedep(CPotentialBase):
     df: bool
         If True, this body will feel Dynamical Friction (for now, only available in NbodyDirect
         and for a=b=c=1)
+    ml: numeric
+        1>=ml>0, percentatge of mass loss at pericentre. When used backwards, it divides the current mass, so it has to be estrictly positive. 1-keep the mass, 0-loss all the mass.
     {common_doc}
     """
     _physical_types = {'m': 'mass',
                        'r_s': 'length',
                        'a': 'dimensionless',
                        'b': 'dimensionless',
-                       'c': 'dimensionless'}
+                       'c': 'dimensionless',
+                       'df': 'dimensionless',
+                       'ml': 'dimensionless'}
 
-    def __init__(self, m=None, r_s=None, a=1., b=1., c=1.,df=False, v_c=None, units=None,
+    def __init__(self, m=None, r_s=None, a=1., b=1., c=1.,df=False,ml=1, v_c=None, units=None,
                  origin=None, R=None):
         parameters = OrderedDict()
         parameters['m'] = m
@@ -1028,6 +1032,7 @@ class NFWtimedep(CPotentialBase):
         if np.allclose([a, b, c], 1.):
             NFWWrapper = customNFWWrapper
             parameters['df'] = df
+            parameters['ml'] = ml
 
         elif np.allclose([a, b], 1.):
             NFWWrapper = FlattenedNFWWrapper
@@ -1049,7 +1054,7 @@ class NFWtimedep(CPotentialBase):
         return r"\Phi(r) = -\frac{v_c^2}{\sqrt{\ln 2 - \frac{1}{2}}} \frac{\ln(1 + r/r_s)}{r/r_s}"
 
     @staticmethod
-    def from_circular_velocity(v_c, r_s, a=1., b=1., c=1.,df=False, r_ref=None,
+    def from_circular_velocity(v_c, r_s, a=1., b=1., c=1.,df=False,ml=1, r_ref=None,
                                units=None, origin=None, R=None):
         r"""
         from_circular_velocity(v_c, r_s, a=1., b=1., c=1., r_ref=None, units=None, origin=None, R=None)
@@ -1091,7 +1096,7 @@ class NFWtimedep(CPotentialBase):
         m = NFWtimedep._vc_rs_rref_to_m(v_c, r_s, r_ref)
         m = m.to(units['mass'])
 
-        return NFWtimedep(m=m, r_s=r_s, a=a, b=b, c=c,df=df,
+        return NFWtimedep(m=m, r_s=r_s, a=a, b=b, c=c,df=df,ml=ml,
                             units=units, origin=origin, R=R)
 
     @staticmethod

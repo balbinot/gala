@@ -1207,6 +1207,7 @@ double customnfw_value(double t, double *pars, double *q, int n_dim) {
             - m (mass scale)
             - r_s (scale radius)
             - df (bool, True if dynamical friction affects this body)
+            - ml (dimensionless, fraction of mass lost at pericentre 0<ml<=1
     */
     double u, v_h2;
     // v_h2 = pars[1]*pars[1] / (log(2.) - 0.5);
@@ -1221,6 +1222,7 @@ void customnfw_gradient(double t, double *pars, double *q, int n_dim, double *gr
             - m (mass scale)
             - r_s (scale radius)
             - df (bool, True if dynamical friction affects this body)
+            - ml (dimensionless, fraction of mass lost at pericentre 0<ml<=1
     */
     double fac, u, v_h2;
     // v_h2 = pars[1]*pars[1] / (log(2.) - 0.5);
@@ -1240,6 +1242,7 @@ double customnfw_density(double t, double *pars, double *q, int n_dim) {
             - m (mass scale)
             - r_s (scale radius)
             - df (bool, True if dynamical friction affects this body)
+            - ml (dimensionless, fraction of mass lost at pericentre 0<ml<=1
     */
     // double v_h2 = pars[1]*pars[1] / (log(2.) - 0.5);
     double v_h2 = pars[0] * pars[1] / pars[2];
@@ -1256,6 +1259,7 @@ double customnfw_hessian(double t, double *pars, double *q, int n_dim, double *h
         - m (mass scale)
         - r_s (scale radius)
         - df (bool, True if dynamical friction affects this body)
+        - ml (dimensionless, fraction of mass lost at pericentre 0<ml<=1
   */
   // double v_h2 = pars[1]*pars[1] / (log(2.) - 0.5);
   double v_h2 = -pars[0] * pars[1] / pars[2];
